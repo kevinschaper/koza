@@ -27,17 +27,22 @@ class KGXWriter(KozaWriter):
         self.converter: KGXConverter = KGXConverter()
         self.transformer: Transformer = Transformer(stream=True)
         self.source: GraphSource = GraphSource()
-        self.sink = self.get_sink()
-
-    def get_sink(self) -> Sink:
-        if self.output_format == 'jsonl':
-            return JsonlSink(filename=f"{self.output_dir}/{self.source_name}")
-        # TODO: the json writer doesn't actually make valid json, I don't think streaming into two places in one file
-        # TODO: makes any sense, this would probably have to save up and dump all at once
-        elif self.output_format == 'json':
-            return JsonSink(filename=f"{self.output_dir}/{self.source_name}")
-        elif self.output_format == 'tsv':
-            return TsvSink(filename=f"{self.output_dir}/{self.source_name}", format='tsv')
+        self.transformer.transform(
+                input_args={
+                    "format": "graph",
+                    "graph": NxGraph()
+                },
+                output_args={
+                    "filename": f"{self.output_dir}/{self.source_name}",
+                    "stream": True,
+                    "format": str(output_format).split(".")[1],
+                    "finalize": False,
+                    # TODO: these properties need to be expanded, probably passed in or (possibly) inferred
+                    # TODO: based on which classes are used
+                    "node_properties": ['id', 'category'],
+                    "edge_properties": ['subject', 'predicate', 'object', 'relation']
+                },
+        )
 
     def write(self, *entities: Iterable[Entity]):
 
@@ -50,10 +55,10 @@ class KGXWriter(KozaWriter):
         for edge in edges:
             graph.add_edge(edge['subject'], edge['object'], edge['id'], **edge)
 
-        self.transformer.process(self.source.parse(graph), self.sink)
+        self.transformer.process(self.source.parse(graph), self.transformer.sink)
 
     def finalize(self):
-        self.sink.finalize()
+        self.transformer.sink.finalize()
 
     def writerow(self, row: Iterable[Any]) -> Optional[int]:
         pass
